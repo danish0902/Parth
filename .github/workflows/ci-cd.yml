@@ -10,10 +10,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
     
@@ -26,6 +26,10 @@ jobs:
       run: |
         flake8 app.py --count --select=E9,F63,F7,F82 --show-source --statistics
     
+    - name: Run unit tests
+      run: |
+        python test_app.py -v
+    
     - name: Test Python app
       run: |
         python app.py
@@ -34,7 +38,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Install Podman
       run: |
@@ -55,7 +59,7 @@ jobs:
         podman save myapp:latest -o myapp-image.tar
     
     - name: Upload image artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: container-image
         path: myapp-image.tar
@@ -66,10 +70,10 @@ jobs:
     if: github.ref == 'refs/heads/develop'
     environment: staging
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Download image artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: container-image
     
@@ -90,10 +94,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
     environment: production
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Download image artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: container-image
     
