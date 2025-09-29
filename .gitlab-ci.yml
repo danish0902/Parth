@@ -51,7 +51,7 @@ deploy_staging:
     name: staging
     url: http://staging.example.com:8081
   only:
-    - develop
+    - merge_requests
 
 # Deploy to production
 deploy_production:
