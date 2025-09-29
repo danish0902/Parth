@@ -12,9 +12,9 @@ test_job:
   stage: test
   image: python:3.9-slim
   script:
-    - pip install flake8 pytest
+    - pip install flake8 pytest flask requests
     - flake8 app.py --count --select=E9,F63,F7,F82 --show-source --statistics
-    - python app.py
+    - python test_app.py -v
   only:
     - merge_requests
     - main
@@ -29,7 +29,15 @@ build_job:
   script:
     - podman build -t $IMAGE_NAME:$IMAGE_TAG .
     - podman build -t $IMAGE_NAME:latest .
-    - podman run --rm $IMAGE_NAME:latest
+    
+    # Test the containerized web service
+    - podman run -d --name test-container -p 8082:80 $IMAGE_NAME:latest
+    - sleep 5
+    - curl -f http://localhost:8082/ || (podman logs test-container && exit 1)
+    - curl -f http://localhost:8082/health || (podman logs test-container && exit 1)
+    - podman stop test-container
+    - podman rm test-container
+    
     - podman save $IMAGE_NAME:latest -o myapp-image.tar
   artifacts:
     paths:
@@ -45,7 +53,19 @@ deploy_staging:
   image: quay.io/podman/stable
   script:
     - podman load -i myapp-image.tar
+    
+    # Stop existing container if running
+    - podman stop myapp-staging 2>/dev/null || true
+    - podman rm myapp-staging 2>/dev/null || true
+    
+    # Start new container
     - podman run -d --name myapp-staging -p 8081:80 $IMAGE_NAME:latest
+    
+    # Wait and verify deployment
+    - sleep 5
+    - curl -f http://localhost:8081/ || (podman logs myapp-staging && exit 1)
+    - curl -f http://localhost:8081/health || (podman logs myapp-staging && exit 1)
+    
     - echo "Deployed to staging environment"
   environment:
     name: staging
@@ -59,7 +79,19 @@ deploy_production:
   image: quay.io/podman/stable
   script:
     - podman load -i myapp-image.tar
+    
+    # Stop existing container if running
+    - podman stop myapp-prod 2>/dev/null || true
+    - podman rm myapp-prod 2>/dev/null || true
+    
+    # Start new container
     - podman run -d --name myapp-prod -p 8080:80 $IMAGE_NAME:latest
+    
+    # Wait and verify deployment
+    - sleep 5
+    - curl -f http://localhost:8080/ || (podman logs myapp-prod && exit 1)
+    - curl -f http://localhost:8080/health || (podman logs myapp-prod && exit 1)
+    
     - echo "Deployed to production environment"
   environment:
     name: production

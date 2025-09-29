@@ -20,7 +20,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest flake8
+        pip install pytest flake8 flask requests
     
     - name: Lint with flake8
       run: |
@@ -52,7 +52,19 @@ jobs:
     
     - name: Test container
       run: |
-        podman run --rm myapp:latest
+        # Start container in background
+        podman run -d --name test-container -p 8082:80 myapp:latest
+        
+        # Wait for container to be ready
+        sleep 5
+        
+        # Test if service is responding
+        curl -f http://localhost:8082/ || (podman logs test-container && exit 1)
+        curl -f http://localhost:8082/health || (podman logs test-container && exit 1)
+        
+        # Clean up
+        podman stop test-container
+        podman rm test-container
     
     - name: Save image (artifact)
       run: |
@@ -85,8 +97,23 @@ jobs:
     - name: Load and deploy to staging
       run: |
         podman load -i myapp-image.tar
+        
+        # Stop existing container if running
+        podman stop myapp-staging 2>/dev/null || true
+        podman rm myapp-staging 2>/dev/null || true
+        
+        # Start new container
         podman run -d --name myapp-staging -p 8081:80 myapp:latest
+        
+        # Wait for container to be ready
+        sleep 5
+        
+        # Verify deployment
+        curl -f http://localhost:8081/ || (podman logs myapp-staging && exit 1)
+        curl -f http://localhost:8081/health || (podman logs myapp-staging && exit 1)
+        
         echo "Deployed to staging environment"
+        echo "Service is running at http://localhost:8081"
 
   deploy-production:
     needs: build
@@ -109,5 +136,20 @@ jobs:
     - name: Load and deploy to production
       run: |
         podman load -i myapp-image.tar
+        
+        # Stop existing container if running
+        podman stop myapp-prod 2>/dev/null || true
+        podman rm myapp-prod 2>/dev/null || true
+        
+        # Start new container
         podman run -d --name myapp-prod -p 8080:80 myapp:latest
+        
+        # Wait for container to be ready
+        sleep 5
+        
+        # Verify deployment
+        curl -f http://localhost:8080/ || (podman logs myapp-prod && exit 1)
+        curl -f http://localhost:8080/health || (podman logs myapp-prod && exit 1)
+        
         echo "Deployed to production environment"
+        echo "Service is running at http://localhost:8080"
