@@ -94,6 +94,28 @@ After running this project, you'll understand:
 - **Production deployment** strategies and automation
 - **DevOps workflow** from development to deployment
 
+## 🚀 Deployment Workflow
+
+This repository uses a modern CI/CD pipeline with automated staging and manual production deployment:
+
+### Staging Deployment (Automatic)
+- **Trigger**: Pull requests to `main` branch
+- **Purpose**: Test code changes before merging
+- **Environment**: `http://staging.example.com:8081`
+- **Status**: ✅ Automated on PR creation
+
+### Production Deployment (Manual)
+- **Trigger**: Push to `main` branch (requires manual approval)
+- **Purpose**: Deploy stable code to production
+- **Environment**: `http://production.example.com:8080`
+- **Status**: 🔐 Manual approval required
+
+### Workflow Steps
+1. **Create feature branch** → Work on changes
+2. **Open pull request** → Staging deployment triggered automatically
+3. **Review & test** → Verify changes in staging environment
+4. **Merge to main** → Production deployment available (manual approval)
+
 ## 🐛 Troubleshooting
 
 **Podman not found?**
