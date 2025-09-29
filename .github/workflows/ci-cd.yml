@@ -1,4 +1,4 @@
-name: CI/CD Pipeline with Podman
+name: CI/CD Pipeline with Podman (Fixed)
 
 on:
   push:
@@ -10,7 +10,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -21,12 +21,18 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pytest flake8
+        # Install any other dependencies your app needs
     
     - name: Lint with flake8
       run: |
-        flake8 app.py --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     
-    - name: Test Python app
+    - name: Run unit tests
+      run: |
+        python -m pytest test_app.py -v
+    
+    - name: Test app execution
       run: |
         python app.py
 
@@ -34,7 +40,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Install Podman
       run: |
@@ -48,30 +54,43 @@ jobs:
     
     - name: Test container
       run: |
-        podman run --rm myapp:latest
+        # Run container and capture output
+        output=$(podman run --rm myapp:latest)
+        echo "Container output: $output"
+        
+        # Verify expected output
+        if [[ "$output" == *"Hello from Podman container!"* ]]; then
+          echo "✅ Container test passed"
+        else
+          echo "❌ Container test failed"
+          exit 1
+        fi
     
     - name: Save image (artifact)
       run: |
         podman save myapp:latest -o myapp-image.tar
     
     - name: Upload image artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: container-image
+        name: container-image-${{ github.sha }}
         path: myapp-image.tar
+        retention-days: 1
 
   deploy-staging:
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
-    environment: staging
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    environment: 
+      name: staging
+      url: http://localhost:8081
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Download image artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
-        name: container-image
+        name: container-image-${{ github.sha }}
     
     - name: Install Podman
       run: |
@@ -80,22 +99,38 @@ jobs:
     
     - name: Load and deploy to staging
       run: |
+        # Clean up any existing containers
+        podman rm -f myapp-staging || true
+        
+        # Load image
         podman load -i myapp-image.tar
-        podman run -d --name myapp-staging -p 8081:80 myapp:latest
-        echo "Deployed to staging environment"
+        
+        # For a simple script app, we'll run it once to verify
+        echo "Testing container deployment..."
+        output=$(podman run --rm --name myapp-staging-test myapp:latest)
+        echo "Staging deployment test output: $output"
+        
+        if [[ "$output" == *"Hello from Podman container!"* ]]; then
+          echo "✅ Staging deployment successful"
+        else
+          echo "❌ Staging deployment failed"
+          exit 1
+        fi
 
   deploy-production:
-    needs: build
+    needs: [build, deploy-staging]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    environment: production
+    environment: 
+      name: production
+      url: http://localhost:8080
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Download image artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
-        name: container-image
+        name: container-image-${{ github.sha }}
     
     - name: Install Podman
       run: |
@@ -104,6 +139,20 @@ jobs:
     
     - name: Load and deploy to production
       run: |
+        # Clean up any existing containers
+        podman rm -f myapp-prod || true
+        
+        # Load image
         podman load -i myapp-image.tar
-        podman run -d --name myapp-prod -p 8080:80 myapp:latest
-        echo "Deployed to production environment"
+        
+        # For a simple script app, we'll run it once to verify
+        echo "Testing production deployment..."
+        output=$(podman run --rm --name myapp-prod-test myapp:latest)
+        echo "Production deployment test output: $output"
+        
+        if [[ "$output" == *"Hello from Podman container!"* ]]; then
+          echo "✅ Production deployment successful"
+        else
+          echo "❌ Production deployment failed"
+          exit 1
+        fi
